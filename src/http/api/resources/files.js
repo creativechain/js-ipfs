@@ -143,11 +143,12 @@ exports.add = {
         // cid-version > 0 unless explicitly set to false.
         //
         // This retains feature parity without having to implement raw-leaves.
-        'raw-leaves': Joi.any().when('cid-version', {
+        'raw-leaves': Joi.boolean().when('cid-version', {
           is: 1,
           then: Joi.boolean().valid(false).required(),
           otherwise: Joi.boolean().valid(false)
-        })
+        }),
+        'only-hash': Joi.boolean()
       })
       // TODO: Necessary until validate "recursive", "stream-channels" etc.
       .options({ allowUnknown: true })
@@ -203,9 +204,10 @@ exports.add = {
     }
 
     const options = {
-      'cid-version': request.query['cid-version'],
-      'raw-leaves': request.query['raw-leaves'],
-      progress: request.query['progress'] ? progressHandler : null
+      cidVersion: request.query['cid-version'],
+      rawLeaves: request.query['raw-leaves'],
+      progress: request.query.progress ? progressHandler : null,
+      onlyHash: request.query['only-hash']
     }
 
     const aborter = abortable()
@@ -272,13 +274,14 @@ exports.immutableLs = {
   handler: (request, reply) => {
     const key = request.pre.args.key
     const ipfs = request.server.app.ipfs
+    const recursive = request.query && request.query.recursive === 'true'
 
-    ipfs.ls(key, (err, files) => {
+    ipfs.ls(key, { recursive: recursive }, (err, files) => {
       if (err) {
-        reply({
+        return reply({
           Message: 'Failed to list dir: ' + err.message,
           Code: 0
-        }).code(500)
+        }).code(500).takeover()
       }
 
       reply({
@@ -288,7 +291,8 @@ exports.immutableLs = {
             Name: file.name,
             Hash: file.hash,
             Size: file.size,
-            Type: toTypeCode(file.type)
+            Type: toTypeCode(file.type),
+            Depth: file.depth
           }))
         }]
       })

@@ -1,8 +1,9 @@
 /* eslint-env mocha */
 'use strict'
 
-const expect = require('chai').expect
 const fs = require('fs')
+const os = require('os')
+const expect = require('chai').expect
 const path = require('path')
 const compareDir = require('dir-compare').compareSync
 const rimraf = require('rimraf').sync
@@ -270,6 +271,35 @@ describe('files', () => runOnAndOff((thing) => {
       })
   })
 
+  it('add --only-hash outputs correct hash', function () {
+    return ipfs('files add --only-hash src/init-files/init-docs/readme')
+      .then(out =>
+        expect(out)
+          .to.eql('added QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB readme\n')
+      )
+  })
+
+  it('add --only-hash does not add a file to the datastore', function () {
+    this.timeout(30 * 1000)
+    this.slow(10 * 1000)
+    const content = String(Math.random() + Date.now())
+    const filepath = path.join(os.tmpdir(), `${content}.txt`)
+    fs.writeFileSync(filepath, content)
+
+    return ipfs(`files add --only-hash ${filepath}`)
+      .then(out => {
+        const hash = out.split(' ')[1]
+
+        // 'jsipfs object get <hash>' should timeout with the daemon on
+        // and should fail fast with the daemon off
+        return Promise.race([
+          ipfs.fail(`object get ${hash}`),
+          new Promise((resolve, reject) => setTimeout(resolve, 4000))
+        ])
+          .then(() => fs.unlinkSync(filepath))
+      })
+  })
+
   it('cat', function () {
     this.timeout(30 * 1000)
 
@@ -293,72 +323,6 @@ describe('files', () => runOnAndOff((thing) => {
       .then(() => expect.fail(0, 1, 'Should have thrown an error'))
       .catch((err) => {
         expect(err).to.exist()
-      })
-  })
-
-  it('ls', function () {
-    this.timeout(20 * 1000)
-
-    return ipfs('ls QmYmW4HiZhotsoSqnv2o1oUusvkRM8b9RweBoH7ao5nki2')
-      .then((out) => {
-        expect(out).to.eql(
-          'QmQQHYDwAQms78fPcvx1uFFsfho23YJNoewfLbi9AtdyJ9 123530 blocks/\n' +
-          'QmPkWYfSLCEBLZu7BZt4kigGDMe3cpogMbeVf97gN2xJDN 3939   config\n' +
-          'Qma13ZrhKG52MWnwtZ6fMD8jGj8d4Q9sJgn5xtKgeZw5uz 5503   datastore/\n' +
-          'QmUhUuiTKkkK8J6JZ9zmj8iNHPuNfGYcszgRumzhHBxEEU 7397   init-docs/\n' +
-          'QmR56UJmAaZLXLdTT1ALrE9vVqV8soUEekm9BMd4FnuYqV 10     version\n')
-      })
-  })
-
-  it('ls -v', function () {
-    this.timeout(20 * 1000)
-
-    return ipfs('ls /ipfs/QmYmW4HiZhotsoSqnv2o1oUusvkRM8b9RweBoH7ao5nki2 -v')
-      .then((out) => {
-        expect(out).to.eql(
-          'Hash                                           Size   Name\n' +
-          'QmQQHYDwAQms78fPcvx1uFFsfho23YJNoewfLbi9AtdyJ9 123530 blocks/\n' +
-          'QmPkWYfSLCEBLZu7BZt4kigGDMe3cpogMbeVf97gN2xJDN 3939   config\n' +
-          'Qma13ZrhKG52MWnwtZ6fMD8jGj8d4Q9sJgn5xtKgeZw5uz 5503   datastore/\n' +
-          'QmUhUuiTKkkK8J6JZ9zmj8iNHPuNfGYcszgRumzhHBxEEU 7397   init-docs/\n' +
-          'QmR56UJmAaZLXLdTT1ALrE9vVqV8soUEekm9BMd4FnuYqV 10     version\n')
-      })
-  })
-
-  it('ls <subdir>', function () {
-    this.timeout(20 * 1000)
-
-    return ipfs('ls /ipfs/QmYmW4HiZhotsoSqnv2o1oUusvkRM8b9RweBoH7ao5nki2/init-docs')
-      .then((out) => {
-        expect(out).to.eql(
-          'QmZTR5bcpQD7cFgTorqxZDYaew1Wqgfbd2ud9QqGPAkK2V 1688 about\n' +
-          'QmYCvbfNbCwFR45HiNP45rwJgvatpiW38D961L5qAhUM5Y 200  contact\n' +
-          'QmegvLXxpVKiZ4b57Xs1syfBVRd8CbucVHAp7KpLQdGieC 65   docs/\n' +
-          'QmY5heUM5qgRubMDD1og9fhCPA6QdkMp3QCwd4s7gJsyE7 322  help\n' +
-          'QmdncfsVm2h5Kqq9hPmU7oAVX2zTSVP3L869tgTbPYnsha 1728 quick-start\n' +
-          'QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB 1102 readme\n' +
-          'QmTumTjvcYCAvRRwQ8sDRxh8ezmrcr88YFU7iYNroGGTBZ 1027 security-notes\n' +
-          'QmciSU8hfpAXKjvK5YLUSwApomGSWN5gFbP4EpDAEzu2Te 863  tour/\n')
-      })
-  })
-
-  it('ls --help', function () {
-    this.timeout(20 * 1000)
-
-    return ipfs('ls --help')
-      .then((out) => {
-        expect(out.split('\n').slice(1)).to.eql(['',
-          'List files for the given directory',
-          '',
-          'Options:',
-          '  --version       Show version number                                  [boolean]',
-          '  --silent        Write no output                     [boolean] [default: false]',
-          '  --help          Show help                                            [boolean]',
-          '  -v, --headers   Print table headers (Hash, Size, Name).',
-          '                                                      [boolean] [default: false]',
-          '  --resolve-type  Resolve linked objects to find out their types. (not',
-          '                  implemented yet)                    [boolean] [default: false]',
-          '', ''])
       })
   })
 

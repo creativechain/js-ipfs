@@ -13,6 +13,7 @@ const deferred = require('pull-defer')
 const waterfall = require('async/waterfall')
 const isStream = require('is-stream')
 const Duplex = require('readable-stream').Duplex
+const OtherBuffer = require('buffer').Buffer
 const CID = require('cids')
 const toB58String = require('multihashes').toB58String
 
@@ -22,7 +23,7 @@ function prepareFile (self, opts, file, callback) {
   opts = opts || {}
 
   waterfall([
-    (cb) => self.object.get(file.multihash, cb),
+    (cb) => opts.onlyHash ? cb(null, file) : self.object.get(file.multihash, cb),
     (node, cb) => {
       let cid = new CID(node.multihash)
 
@@ -120,7 +121,7 @@ module.exports = function files (self) {
     return pull(
       pull.map(normalizeContent),
       pull.flatten(),
-      importer(self._ipldResolver, opts),
+      importer(self._ipld, opts),
       pull.asyncMap(prepareFile.bind(null, self, opts))
     )
   }
@@ -138,7 +139,7 @@ module.exports = function files (self) {
     const d = deferred.source()
 
     pull(
-      exporter(ipfsPath, self._ipldResolver),
+      exporter(ipfsPath, self._ipld),
       pull.collect((err, files) => {
         if (err) { return d.abort(err) }
         if (files && files.length > 1) {
@@ -160,14 +161,20 @@ module.exports = function files (self) {
     return d
   }
 
-  function _lsPullStreamImmutable (ipfsPath) {
+  function _lsPullStreamImmutable (ipfsPath, options) {
     const path = normalizePath(ipfsPath)
-    const depth = path.split('/').length
+    const recursive = options && options.recursive
+    const pathDepth = path.split('/').length
+    const maxDepth = recursive ? global.Infinity : pathDepth
+
     return pull(
-      exporter(ipfsPath, self._ipldResolver, { maxDepth: depth }),
-      pull.filter((node) => node.depth === depth),
-      pull.map((node) => {
-        node = Object.assign({}, node, { hash: toB58String(node.hash) })
+      exporter(ipfsPath, self._ipld, { maxDepth: maxDepth }),
+      pull.filter(node =>
+        recursive ? node.depth >= pathDepth : node.depth === pathDepth
+      ),
+      pull.map(node => {
+        const cid = new CID(node.hash)
+        node = Object.assign({}, node, { hash: cid.toBaseEncodedString() })
         delete node.content
         return node
       })
@@ -183,10 +190,14 @@ module.exports = function files (self) {
         callback = noop
       }
 
-      if (typeof data !== 'object' &&
-          !Buffer.isBuffer(data) &&
-          !isStream(data)) {
-        return callback(new Error('Invalid arguments, data must be an object, Buffer or readable stream'))
+      const ok = Buffer.isBuffer(data) ||
+                 isStream.readable(data) ||
+                 Array.isArray(data) ||
+                 OtherBuffer.isBuffer(data) ||
+                 typeof data === 'object'
+
+      if (!ok) {
+        return callback(new Error('first arg must be a buffer, readable stream, an object or array of objects'))
       }
 
       pull(
@@ -235,7 +246,7 @@ module.exports = function files (self) {
 
     get: promisify((ipfsPath, callback) => {
       pull(
-        exporter(ipfsPath, self._ipldResolver),
+        exporter(ipfsPath, self._ipld),
         pull.asyncMap((file, cb) => {
           if (file.content) {
             pull(
@@ -257,7 +268,7 @@ module.exports = function files (self) {
     getReadableStream: (ipfsPath) => {
       return toStream.source(
         pull(
-          exporter(ipfsPath, self._ipldResolver),
+          exporter(ipfsPath, self._ipld),
           pull.map((file) => {
             if (file.content) {
               file.content = toStream.source(file.content)
@@ -271,23 +282,29 @@ module.exports = function files (self) {
     },
 
     getPullStream: (ipfsPath) => {
-      return exporter(ipfsPath, self._ipldResolver)
+      return exporter(ipfsPath, self._ipld)
     },
 
-    lsImmutable: promisify((ipfsPath, callback) => {
+    lsImmutable: promisify((ipfsPath, options, callback) => {
+      if (typeof options === 'function') {
+        callback = options
+        options = {}
+      }
+
       pull(
-        _lsPullStreamImmutable(ipfsPath),
+        _lsPullStreamImmutable(ipfsPath, options),
         pull.collect((err, values) => {
           if (err) {
-            return callback(err)
+            callback(err)
+            return
           }
           callback(null, values)
         })
       )
     }),
 
-    lsReadableStreamImmutable: (ipfsPath) => {
-      return toStream.source(_lsPullStreamImmutable(ipfsPath))
+    lsReadableStreamImmutable: (ipfsPath, options) => {
+      return toStream.source(_lsPullStreamImmutable(ipfsPath, options))
     },
 
     lsPullStreamImmutable: _lsPullStreamImmutable
@@ -297,6 +314,9 @@ module.exports = function files (self) {
 function normalizePath (path) {
   if (Buffer.isBuffer(path)) {
     path = toB58String(path)
+  }
+  if (CID.isCID(path)) {
+    path = path.toBaseEncodedString()
   }
   if (path.indexOf('/ipfs/') === 0) {
     path = path.substring('/ipfs/'.length)

@@ -1,22 +1,41 @@
 'use strict'
 
 const defaultNodes = require('../runtime/config-nodejs.json').Bootstrap
+const isMultiaddr = require('mafmt').IPFS.matches
+const promisify = require('promisify-es6')
+
+function isValidMultiaddr (ma) {
+  try {
+    return isMultiaddr(ma)
+  } catch (err) {
+    return false
+  }
+}
+
+function invalidMultiaddrError (ma) {
+  return new Error(`${ma} is not a valid Multiaddr`)
+}
 
 module.exports = function bootstrap (self) {
   return {
-    list: (callback) => {
+    list: promisify((callback) => {
       self._repo.config.get((err, config) => {
         if (err) {
           return callback(err)
         }
         callback(null, {Peers: config.Bootstrap})
       })
-    },
-    add: (multiaddr, args, callback) => {
+    }),
+    add: promisify((multiaddr, args, callback) => {
       if (typeof args === 'function') {
         callback = args
-        args = {default: false}
+        args = { default: false }
       }
+
+      if (multiaddr && !isValidMultiaddr(multiaddr)) {
+        return setImmediate(() => callback(invalidMultiaddrError(multiaddr)))
+      }
+
       self._repo.config.get((err, config) => {
         if (err) {
           return callback(err)
@@ -36,12 +55,16 @@ module.exports = function bootstrap (self) {
           })
         })
       })
-    },
-    rm: (multiaddr, args, callback) => {
+    }),
+    rm: promisify((multiaddr, args, callback) => {
       if (typeof args === 'function') {
         callback = args
         args = {all: false}
       }
+      if (multiaddr && !isValidMultiaddr(multiaddr)) {
+        return setImmediate(() => callback(invalidMultiaddrError(multiaddr)))
+      }
+
       self._repo.config.get((err, config) => {
         if (err) {
           return callback(err)
@@ -65,6 +88,6 @@ module.exports = function bootstrap (self) {
           callback(null, {Peers: res})
         })
       })
-    }
+    })
   }
 }

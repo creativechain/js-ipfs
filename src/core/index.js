@@ -1,7 +1,7 @@
 'use strict'
 
 const BlockService = require('ipfs-block-service')
-const IPLDResolver = require('ipld-resolver')
+const Ipld = require('ipld')
 const PeerId = require('peer-id')
 const PeerInfo = require('peer-info')
 const multiaddr = require('multiaddr')
@@ -12,6 +12,7 @@ const debug = require('debug')
 const extend = require('deep-extend')
 const EventEmitter = require('events')
 
+const config = require('./config')
 const boot = require('./boot')
 const components = require('./components')
 // replaced by repo-browser when running in the browser
@@ -27,7 +28,7 @@ class IPFS extends EventEmitter {
       EXPERIMENTAL: {}
     }
 
-    options = options || {}
+    options = config.validate(options || {})
     this._libp2pModules = options.libp2p && options.libp2p.modules
 
     extend(this._options, options)
@@ -68,7 +69,7 @@ class IPFS extends EventEmitter {
     this._libp2pNode = undefined
     this._bitswap = undefined
     this._blockService = new BlockService(this._repo)
-    this._ipldResolver = new IPLDResolver(this._blockService)
+    this._ipld = new Ipld(this._blockService)
     this._pubsub = undefined
 
     // IPFS Core exposed components
@@ -77,6 +78,7 @@ class IPFS extends EventEmitter {
     this.preStart = components.preStart(this)
     this.start = components.start(this)
     this.stop = components.stop(this)
+    this.shutdown = this.stop
     this.isOnline = components.isOnline(this)
     //   - interface-ipfs-core defined API
     this.version = components.version(this)
@@ -94,6 +96,9 @@ class IPFS extends EventEmitter {
     this.ping = components.ping(this)
     this.pubsub = components.pubsub(this)
     this.dht = components.dht(this)
+    this.dns = components.dns(this)
+    this.key = components.key(this)
+    this.stats = components.stats(this)
 
     if (this._options.EXPERIMENTAL.pubsub) {
       this.log('EXPERIMENTAL pubsub is enabled')

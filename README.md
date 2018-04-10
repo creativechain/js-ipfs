@@ -45,6 +45,8 @@ You can check the development status at the [Waffle Board](https://waffle.io/ipf
 - DHT: https://github.com/ipfs/js-ipfs/pull/856
 - Relay: https://github.com/ipfs/js-ipfs/pull/1063
 
+[**`Weekly Dev Calls`**](https://github.com/ipfs/js-ipfs/issues/1179)
+
 ## Table of Contents
 
 - [Install](#install)
@@ -65,6 +67,7 @@ You can check the development status at the [Waffle Board](https://waffle.io/ipf
     - [Node Management](#node-management)
     - [Domain data types](#domain-data-types)
 - [FAQ](#faq)
+- [Running js-ipfs with Docker](#running-js-ipfs-with-docker)
 - [Packages](#packages)
 - [Development](#development)
   - [Clone and install dependencies](#clone-and-install-dependencies)
@@ -76,6 +79,8 @@ You can check the development status at the [Waffle Board](https://waffle.io/ipf
 - [License](#license)
 
 ## Install
+
+### npm
 
 This project is available through [npm](https://www.npmjs.com/). To install run
 
@@ -154,9 +159,11 @@ Commands:
 
 The IPFS Daemon exposes the API defined [`http-api-spec`](https://github.com/ipfs/http-api-spec). You can use any of the IPFS HTTP-API client libraries with it, such as: [js-ipfs-api](https://github.com/ipfs/js-ipfs-api).
 
+If you want a programmatic way to spawn a IPFS Daemon using JavaScript, check out [ipfsd-ctl module](https://github.com/ipfs/js-ipfsd-ctl)
+
 ### IPFS Module
 
-Use the IPFS Module as a dependency of a project to spawn in process instances of IPFS.
+Use the IPFS Module as a dependency of a project to __spawn in process instances of IPFS__.
 
 #### Create a IPFS node instance
 
@@ -189,16 +196,25 @@ const repo = <IPFS Repo instance or repo path>
 const node = new IPFS({
   repo: repo,
   init: true, // default
-  // init: false,
+  // init: false, // You will need to set init: false after time you start instantiate a node as
+  //              // the repo will be already initiated then.
   // init: {
   //   bits: 1024 // size of the RSA key generated
   // },
   start: true, // default
   // start: false,
+  pass: undefined // default
+  // pass: 'pass phrase for key access',
   EXPERIMENTAL: { // enable experimental features
     pubsub: true,
     sharding: true, // enable dir sharding
-    dht: true // enable KadDHT, currently not interopable with go-ipfs
+    dht: true, // enable KadDHT, currently not interopable with go-ipfs
+    relay: {
+      enabled: true, // enable circuit relay dialer and listener
+      hop: {
+        enabled: true // enable circuit relay HOP (make this node a relay) 
+      }
+    }
   },
   config: { // overload the default IPFS node config, find defaults at https://github.com/ipfs/js-ipfs/tree/master/src/core/runtime
     Addresses: {
@@ -236,19 +252,19 @@ A complete API definition is in the works. Meanwhile, you can learn how to you u
 
 - [files](https://github.com/ipfs/interface-ipfs-core/blob/master/SPEC/FILES.md)
   - [`ipfs.files.add(data, [options], [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#add)
-  - [`ipfs.files.createAddStream([options], [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#createaddstream)
-  - [`ipfs.files.cat(multihash, [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#cat)
-  - [`ipfs.files.get(hash, [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#get)
+  - [`ipfs.files.addReadableStream([options])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#addreadablestream)
+  - [`ipfs.files.addPullStream([options])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#addpullstream)
+  - [`ipfs.files.cat(ipfsPath, [options], [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#cat)
+  - [`ipfs.files.catReadableStream(ipfsPath, [options])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#catreadablestream)
+  - [`ipfs.files.catPullStream(ipfsPath, [options])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#catpullstream)
+  - [`ipfs.files.get(ipfsPath, [options], [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#get)
+  - [`ipfs.files.getReadableStream(ipfsPath, [options])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#getreadablestream)
+  - [`ipfs.files.getPullStream(ipfsPath, [options])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/FILES.md#getpullstream)  
 
 - [block](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/BLOCK.md)
   - [`ipfs.block.get(cid, [options, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/BLOCK.md#get)
   - [`ipfs.block.put(block, cid, [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/BLOCK.md#put)
   - [`ipfs.block.stat(cid, [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/BLOCK.md#stat)
-
-- [repo](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/)
-  - `ipfs.repo.init`
-  - `ipfs.repo.version`
-  - `ipfs.repo.gc` (not implemented, yet!)
 
 #### `Graph`
 
@@ -256,6 +272,7 @@ A complete API definition is in the works. Meanwhile, you can learn how to you u
   - [`ipfs.dag.put(dagNode, options, callback)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/DAG.md#dagput)
   - [`ipfs.dag.get(cid [, path, options], callback)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/DAG.md#dagget)
   - [`ipfs.dag.tree(cid [, path, options], callback)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/DAG.md#dagtree)
+  
 - [object](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/OBJECT.md).
   - [`ipfs.object.new([template][, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/OBJECT.md#objectnew)
   - [`ipfs.object.put(obj, [options, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/OBJECT.md#objectput)
@@ -269,27 +286,43 @@ A complete API definition is in the works. Meanwhile, you can learn how to you u
   - [`ipfs.object.patch.setData(multihash, data, [options, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/OBJECT.md#objectpatchsetdata)
 - [pin (not implemented, yet!)](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/)
 
+#### `Crypto and Key Management`
+
+- [key](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/KEY.md)
+  - `ipfs.key.export(name, password, [callback])`
+  - `ipfs.key.gen(name, options, [callback])`
+  - `ipfs.key.import(name, pem, password, [callback])`
+  - `ipfs.key.list([callback])`
+  - `ipfs.key.rename(oldName, newName, [callback])`
+  - `ipfs.key.rm(name, [callback])`
+- [crypto (not yet implemented)](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC)
+
 #### `Network`
 
 - [bootstrap](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/)
   - `ipfs.bootstrap.list`
   - `ipfs.bootstrap.add`
   - `ipfs.bootstrap.rm`
+  
 - [bitswap](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/)
   - `ipfs.bitswap.wantlist()`
   - `ipfs.bitswap.stat()`
   - `ipfs.bitswap.unwant()`
+  
 - [dht (not implemented, yet!)](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/)
+
 - [pubsub](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/PUBSUB.md)
   - [`ipfs.pubsub.subscribe(topic, options, handler, callback)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/PUBSUB.md#pubsubsubscribe)
   - [`ipfs.pubsub.unsubscribe(topic, handler)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/PUBSUB.md#pubsubunsubscribe)
   - [`ipfs.pubsub.publish(topic, data, callback)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/PUBSUB.md#pubsubpublish)
   - [`ipfs.pubsub.ls(topic, callback)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/PUBSUB.md#pubsubls)
   - [`ipfs.pubsub.peers(topic, callback)`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/PUBSUB.md#pubsubpeers)
+  
 - [libp2p](https://github.com/libp2p/interface-libp2p). Every IPFS instance also exposes the libp2p SPEC at `ipfs.libp2p`. The formal interface for this SPEC hasn't been defined by you can find documentation at its implementations:
   - [Node.js bundle](./src/core/runtime/libp2p-nodejs.js)
   - [Browser Bundle](./src/core/runtime/libp2p-browser.js)
   - [libp2p baseclass](https://github.com/libp2p/js-libp2p)
+  
 - [swarm](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/SWARM.md)
   - [`ipfs.swarm.addrs([callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/SWARM.md#addrs)
   - [`ipfs.swarm.connect(addr, [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/SWARM.md#connect)
@@ -304,8 +337,22 @@ A complete API definition is in the works. Meanwhile, you can learn how to you u
   - `ipfs.ping()`
   - `ipfs.init([options], callback)`
   - `ipfs.start([callback])`
-  - `ipfs.stop([callback])`
+  - [`ipfs.stop([callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/MISCELLANEOUS.md#stop)
   - `ipfs.isOnline()`
+
+- [repo](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/REPO.md)
+  - `ipfs.repo.init`
+  - [`ipfs.repo.stat([options, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/REPO.md#stat)
+  - [`ipfs.repo.version([callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/REPO.md#version)
+  - `ipfs.repo.gc([options, callback])` (not implemented, yet!)
+
+- [stats](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/STATS.md)
+  - [`ipfs.stats.bitswap([callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/STATS.md#bitswap)
+  - [`ipfs.stats.bw([options, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/STATS.md#bw)
+  - [`ipfs.stats.bwPullStream([options]) -> Pull Stream`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/STATS.md#bwpullstream)
+  - [`ipfs.stats.bwReadableStream([options]) -> Readable Stream`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/STATS.md#bwreadablestream)
+  - [`ipfs.stats.repo([options, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/STATS.md#repo)
+  
 - [config](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/CONFIG.md)
   - [`ipfs.config.get([key, callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/CONFIG.md#configget)
   - [`ipfs.config.set(key, value, [callback])`](https://github.com/ipfs/interface-ipfs-core/tree/master/SPEC/CONFIG.md#configset)
@@ -368,7 +415,7 @@ const node = new IPFS({
       Swarm: [
         "/ip4/0.0.0.0/tcp/4002",
         "/ip4/127.0.0.1/tcp/4003/ws",
-        "/dns4/wrtc-star.discovery.libp2p.io/tcp/433/wss/p2p-webrtc-star"
+        "/dns4/wrtc-star.discovery.libp2p.io/tcp/443/wss/p2p-webrtc-star"
       ]
     }
   },
@@ -466,6 +513,38 @@ HOME=~/.electron-gyp npm install
 
 If you find any other issue, please check the [`Electron Support` issue](https://github.com/ipfs/js-ipfs/issues/843).
 
+## Running js-ipfs with Docker
+
+We have automatic Docker builds setup with Docker Hub: https://hub.docker.com/r/ipfs/js-ipfs/
+
+All branches in the Github repository maps to a tag in Docker Hub, except `master` Git branch which is mapped to `latest` Docker tag.
+
+You can run js-ipfs like this:
+
+```
+$ docker run -it -p 4002:4002 -p 4003:4003 -p 5002:5002 -p 9090:9090 ipfs/js-ipfs:latest
+
+initializing ipfs node at /root/.jsipfs
+generating 2048-bit RSA keypair...done
+peer identity: Qmbd5jx8YF1QLhvwfLbCTWXGyZLyEJHrPbtbpRESvYs4FS
+to get started, enter:
+
+         jsipfs files cat /ipfs/QmfGBRT6BbWJd7yUc2uYdaUZJBbnEFvTqehPFoSMQ6wgdr/readme
+
+Initializing daemon...
+Using wrtc for webrtc support
+Swarm listening on /ip4/127.0.0.1/tcp/4003/ws/ipfs/Qmbd5jx8YF1QLhvwfLbCTWXGyZLyEJHrPbtbpRESvYs4FS
+Swarm listening on /ip4/172.17.0.2/tcp/4003/ws/ipfs/Qmbd5jx8YF1QLhvwfLbCTWXGyZLyEJHrPbtbpRESvYs4FS
+Swarm listening on /ip4/127.0.0.1/tcp/4002/ipfs/Qmbd5jx8YF1QLhvwfLbCTWXGyZLyEJHrPbtbpRESvYs4FS
+Swarm listening on /ip4/172.17.0.2/tcp/4002/ipfs/Qmbd5jx8YF1QLhvwfLbCTWXGyZLyEJHrPbtbpRESvYs4FS
+API is listening on: /ip4/0.0.0.0/tcp/5002
+Gateway (readonly) is listening on: /ip4/0.0.0.0/tcp/9090
+Daemon is ready
+
+$ curl --silent localhost:5002/api/v0/id | jq .ID
+"Qmbd5jx8YF1QLhvwfLbCTWXGyZLyEJHrPbtbpRESvYs4FS"
+```
+
 ## Packages
 
 | Package | Version | Deps | DevDeps | Travis | Circle | AppVeyor | Coverage |
@@ -511,6 +590,10 @@ If you find any other issue, please check the [`Electron Support` issue](https:/
 | [`is-ipfs`](https://github.com/ipfs/is-ipfs) | [![npm](https://img.shields.io/npm/v/is-ipfs.svg?maxAge=86400&style=flat-square)](//github.com/ipfs/is-ipfs/releases) | [![Dep](https://david-dm.org/ipfs/is-ipfs.svg?style=flat-square)](https://david-dm.org/ipfs/is-ipfs) | [![devDep](https://david-dm.org/ipfs/is-ipfs/dev-status.svg?style=flat-square)](https://david-dm.org/ipfs/is-ipfs?type=dev) | [![Travis](https://travis-ci.org/ipfs/is-ipfs.svg?branch=master)](https://travis-ci.org/ipfs/is-ipfs) | | ![Appveyor CI](https://ci.appveyor.com/api/projects/status/github/ipfs/is-ipfs?svg=true) | [![Coverage Status](https://coveralls.io/repos/github/ipfs/is-ipfs/badge.svg?branch=master)](https://coveralls.io/github/ipfs/is-ipfs?branch=master) |
 | [`multihashing`](//github.com/multiformats/js-multihashing) | [![npm](https://img.shields.io/npm/v/multihashing.svg?maxAge=86400&style=flat-square)](//github.com/multiformats/js-multihashing/releases) | [![Dep](https://david-dm.org/multiformats/js-multihashing.svg?style=flat-square)](https://david-dm.org/multiformats/js-multihashing) | [![devDep](https://david-dm.org/multiformats/js-multihashing/dev-status.svg?style=flat-square)](https://david-dm.org/multiformats/js-multihashing?type=dev) | [![Travis](https://travis-ci.org/multiformats/js-multihashing.svg?branch=master)](https://travis-ci.org/multiformats/js-multihashing) | [![Circle CI](https://circleci.com/gh/multiformats/js-multihashing.svg?style=svg)](https://circleci.com/gh/jbenet/js-multihashing) | ![Appveyor CI](https://ci.appveyor.com/api/projects/status/github/multiformats/js-multihashing?svg=true) | [![Coverage Status](https://coveralls.io/repos/github/jbenet/js-multihashing/badge.svg?branch=master)](https://coveralls.io/github/jbenet/js-multihashing?branch=master) |
 | [`mafmt`](//github.com/whyrusleeping/js-mafmt) | [![npm](https://img.shields.io/npm/v/mafmt.svg?maxAge=86400&style=flat-square)](//github.com/whyrusleeping/js-mafmt/releases) | [![Dep](https://david-dm.org/whyrusleeping/js-mafmt.svg?style=flat-square)](https://david-dm.org/whyrusleeping/js-mafmt) | [![devDep](https://david-dm.org/whyrusleeping/js-mafmt/dev-status.svg?style=flat-square)](https://david-dm.org/whyrusleeping/js-mafmt?type=dev) | [![Travis](https://travis-ci.org/whyrusleeping/js-mafmt.svg?branch=master)](https://travis-ci.org/whyrusleeping/js-mafmt) | [![Circle CI](https://circleci.com/gh/whyrusleeping/js-mafmt.svg?style=svg)](https://circleci.com/gh/whyrusleeping/js-mafmt) | ![Appveyor CI](https://ci.appveyor.com/api/projects/status/github/whyrusleeping/js-mafmt?svg=true) | [![Coverage Status](https://coveralls.io/repos/github/whyrusleeping/js-mafmt/badge.svg?branch=master)](https://coveralls.io/github/whyrusleeping/js-mafmt?branch=master) |
+| **Crypto**
+| [`libp2p-crypto`](https://github.com/libp2p/js-libp2p-crypto) | [![npm](https://img.shields.io/npm/v/libp2p-crypto.svg?maxAge=86400&style=flat-square)](//github.com/libp2p/js-libp2p-crypto/releases) | [![Dep](https://david-dm.org/libp2p/js-libp2p-crypto.svg?style=flat-square)](https://david-dm.org/libp2p/js-libp2p-crypto) | [![devDep](https://david-dm.org/libp2p/js-libp2p-crypto/dev-status.svg?style=flat-square)](https://david-dm.org/libp2p/js-libp2p-crypto?type=dev) | [![Travis](https://travis-ci.org/libp2p/js-libp2p-crypto.svg?branch=master)](https://travis-ci.org/libp2p/js-libp2p-crypto) | [![Circle CI](https://circleci.com/gh/libp2p/js-libp2p-crypto.svg?style=svg)](https://circleci.com/gh/libp2p/js-libp2p-crypto) | ![Appveyor CI](https://ci.appveyor.com/api/projects/status/github/libp2p/js-libp2p-crypto?svg=true) | [![Coverage Status](https://coveralls.io/repos/github/libp2p/js-libp2p-crypto/badge.svg?branch=master)](https://coveralls.io/github/libp2p/js-libp2p-crypto?branch=master) |
+| [`libp2p-keychain`](https://github.com/libp2p/js-libp2p-keychain) | [![npm](https://img.shields.io/npm/v/libp2p-keychain.svg?maxAge=86400&style=flat-square)](//github.com/libp2p/js-libp2p-keychain/releases) | [![Dep](https://david-dm.org/libp2p/js-libp2p-keychain.svg?style=flat-square)](https://david-dm.org/libp2p/js-libp2p-keychain) | [![devDep](https://david-dm.org/libp2p/js-libp2p-keychain/dev-status.svg?style=flat-square)](https://david-dm.org/libp2p/js-libp2p-keychain?type=dev) | [![Travis](https://travis-ci.org/libp2p/js-libp2p-keychain.svg?branch=master)](https://travis-ci.org/libp2p/js-libp2p-keychain) | [![Circle CI](https://circleci.com/gh/libp2p/js-libp2p-keychain.svg?style=svg)](https://circleci.com/gh/libp2p/js-libp2p-keychain) | ![Appveyor CI](https://ci.appveyor.com/api/projects/status/github/libp2p/js-libp2p-keychain?svg=true) | [![Coverage Status](https://coveralls.io/repos/github/libp2p/js-libp2p-keychain/badge.svg?branch=master)](https://coveralls.io/github/libp2p/js-libp2p-keychain?branch=master) |
+
 
 ## Development
 
